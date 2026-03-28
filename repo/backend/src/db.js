@@ -14,13 +14,13 @@ const pool = mysql.createPool({
 
 export async function query(sql, params = []) {
   const hasParams = Array.isArray(params) && params.length > 0;
-  const [rows] = hasParams ? await pool.execute(sql, params) : await pool.query(sql);
+  const [rows] = hasParams ? await pool.query(sql, params) : await pool.query(sql);
   return rows;
 }
 
 export async function execute(sql, params = []) {
   const hasParams = Array.isArray(params) && params.length > 0;
-  const [result] = hasParams ? await pool.execute(sql, params) : await pool.query(sql);
+  const [result] = hasParams ? await pool.query(sql, params) : await pool.query(sql);
   return result;
 }
 

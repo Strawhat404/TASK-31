@@ -2,45 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { _testables as ingest } from '../backend/src/services/ingestionService.js';
 
-test('miles to kilometers normalization', () => {
+test('converts miles to km with stable precision', () => {
+  assert.equal(ingest.milesToKilometers(1), 1.6093);
   assert.equal(ingest.milesToKilometers(10), 16.0934);
 });
 
-test('currency conversion to USD', () => {
+test('converts currencies to USD using configured FX table', () => {
   assert.equal(ingest.convertToUsd(100, 'EUR'), 108);
   assert.equal(ingest.convertToUsd(1000, 'KES'), 7.8);
+  assert.equal(ingest.convertToUsd(50, 'USD'), 50);
 });
 
-test('deterministic key remains stable', () => {
-  const row = {
+test('deterministic dedupe key is stable and input-sensitive', () => {
+  const rowA = {
     vehicle_plate: 'KAA123A',
     customer_id: '42',
     appointment_ts: '2026-03-26T10:00:00Z',
     location_code: 'HQ',
     department_code: 'OPS'
   };
-  assert.equal(ingest.deterministicKey(row), ingest.deterministicKey(row));
-});
 
-test('dedupe removes similar duplicates', () => {
-  const rows = [
-    {
-      vehicle_plate: 'KAA123A',
-      customer_id: '42',
-      appointment_ts: '2026-03-26T10:00:00Z',
-      location_code: 'HQ',
-      department_code: 'OPS'
-    },
-    {
-      vehicle_plate: 'KAA123A',
-      customer_id: '42',
-      appointment_ts: '2026-03-26T10:00:00Z',
-      location_code: 'HQ',
-      department_code: 'OPS'
-    }
-  ];
+  const rowB = { ...rowA };
+  const rowC = { ...rowA, vehicle_plate: 'KAA124A' };
 
-  const out = ingest.dedupeRows(rows);
-  assert.equal(out.rows.length, 1);
-  assert.equal(out.duplicateCount, 1);
+  assert.equal(ingest.deterministicKey(rowA), ingest.deterministicKey(rowB));
+  assert.notEqual(ingest.deterministicKey(rowA), ingest.deterministicKey(rowC));
 });

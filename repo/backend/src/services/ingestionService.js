@@ -134,6 +134,43 @@ function deviationPercent(current, baseline) {
   return Number((Math.abs((current - baseline) / baseline) * 100).toFixed(5));
 }
 
+function extractPriority(payload) {
+  return Number(payload?.priority ?? 100);
+}
+
+function pickJobByPriority(jobs) {
+  const queued = (Array.isArray(jobs) ? jobs : []).filter((j) => j && j.status === 'queued');
+  if (!queued.length) return null;
+
+  return queued
+    .slice()
+    .sort((a, b) => {
+      const ap = extractPriority(a.payload || {});
+      const bp = extractPriority(b.payload || {});
+      if (ap !== bp) return ap - bp;
+      const at = new Date(a.created_at || 0).getTime();
+      const bt = new Date(b.created_at || 0).getTime();
+      return at - bt;
+    })[0];
+}
+
+function computeRetryState(payload = {}) {
+  const retries = Number(payload.retries || 0) + 1;
+  if (retries > MAX_RETRIES) {
+    return { retries, shouldFail: true, retryAfterMs: 0 };
+  }
+  return { retries, shouldFail: false, retryAfterMs: 2 ** retries * 1000 };
+}
+
+function buildCheckpointSnapshot({ parsedRows, writtenRows, versionNo }) {
+  return {
+    rows_parsed: Number(parsedRows || 0),
+    rows_written: Number(writtenRows || 0),
+    dataset_version: Number(versionNo || 0),
+    last_processed_row: Number(parsedRows || 0)
+  };
+}
+
 export async function enqueueIngestionJob({
   submittedBy,
   sourceSystem,
@@ -190,8 +227,8 @@ async function pickNextJob() {
 }
 
 async function markRetry(jobId, payload, errorMessage) {
-  const retries = Number(payload.retries || 0) + 1;
-  if (retries > MAX_RETRIES) {
+  const retryState = computeRetryState(payload);
+  if (retryState.shouldFail) {
     await query('UPDATE ingestion_jobs SET status = \'failed\', error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [
       errorMessage,
       jobId
@@ -199,7 +236,7 @@ async function markRetry(jobId, payload, errorMessage) {
     return;
   }
 
-  const nextPayload = { ...payload, retries, retryAfterMs: 2 ** retries * 1000 };
+  const nextPayload = { ...payload, retries: retryState.retries, retryAfterMs: retryState.retryAfterMs };
   await query(
     `UPDATE ingestion_jobs
      SET status = 'queued', error_message = ?, payload = ?, updated_at = CURRENT_TIMESTAMP
@@ -270,10 +307,15 @@ async function processCsvJob(jobId, payload) {
   const vrows = await query('SELECT LAST_INSERT_ID() AS id');
   const datasetVersionId = vrows[0].id;
 
-  await saveCheckpoint(jobId, 'rows_parsed', parsed.length);
-  await saveCheckpoint(jobId, 'rows_written', rows.length);
-  await saveCheckpoint(jobId, 'dataset_version', versionNo);
-  await saveCheckpoint(jobId, 'last_processed_row', parsed.length);
+  const snapshot = buildCheckpointSnapshot({
+    parsedRows: parsed.length,
+    writtenRows: rows.length,
+    versionNo
+  });
+  await saveCheckpoint(jobId, 'rows_parsed', snapshot.rows_parsed);
+  await saveCheckpoint(jobId, 'rows_written', snapshot.rows_written);
+  await saveCheckpoint(jobId, 'dataset_version', snapshot.dataset_version);
+  await saveCheckpoint(jobId, 'last_processed_row', snapshot.last_processed_row);
 
   const baseline = await baselineMetrics(datasetName);
   if (baseline.count >= 14) {
@@ -370,5 +412,9 @@ export const _testables = {
   convertToUsd,
   deterministicKey,
   dedupeRows,
-  deviationPercent
+  deviationPercent,
+  pickJobByPriority,
+  computeRetryState,
+  buildCheckpointSnapshot,
+  MAX_RETRIES
 };

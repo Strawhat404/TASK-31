@@ -30,7 +30,7 @@ export const config = {
     keyPath: mustHave('TLS_KEY_PATH', './certs/server.key')
   },
   encryption: {
-    // Placeholder only: wiring for AES-256 at-rest encryption for sensitive columns.
-    aes256KeyHex: mustHave('AES_256_KEY_HEX', 'PLACEHOLDER_64_HEX_CHARS_FOR_AES_256')
+    // Accept either DATA_ENCRYPTION_KEY or legacy AES_256_KEY_HEX.
+    aes256KeyHex: mustHave('DATA_ENCRYPTION_KEY', mustHave('AES_256_KEY_HEX', 'PLACEHOLDER_64_HEX_CHARS_FOR_AES_256'))
   }
 };

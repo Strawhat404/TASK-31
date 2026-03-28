@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "[1/2] Running backend tests"
 (
   cd "$SCRIPT_DIR/backend"
+  [ -d node_modules ] || npm install
   npm test
 )
 

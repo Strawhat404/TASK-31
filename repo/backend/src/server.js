@@ -3,7 +3,6 @@ import http from 'http';
 import https from 'https';
 import Koa from 'koa';
 import bodyParser from 'koa-bodyparser';
-import cors from '@koa/cors';
 import { config } from './config.js';
 import { query } from './db.js';
 import { rateLimit } from './middleware/rateLimit.js';
@@ -28,6 +27,27 @@ import inspectionsRoutes from './routes/inspections.js';
 const app = new Koa();
 
 app.use(async (ctx, next) => {
+  const allowedOrigin = 'http://localhost:5173';
+  const requestOrigin = ctx.get('Origin');
+
+  if (requestOrigin === allowedOrigin) {
+    ctx.set('Access-Control-Allow-Origin', allowedOrigin);
+    ctx.set('Vary', 'Origin');
+  }
+
+  ctx.set('Access-Control-Allow-Credentials', 'true');
+  ctx.set('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+  ctx.set('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+
+  if (ctx.method === 'OPTIONS') {
+    ctx.status = 204;
+    return;
+  }
+
+  await next();
+});
+
+app.use(async (ctx, next) => {
   try {
     await next();
   } catch (error) {
@@ -41,16 +61,6 @@ app.use(async (ctx, next) => {
     ctx.body = { error: 'Internal Server Error' };
   }
 });
-
-app.use(
-  cors({
-    origin: (ctx) => {
-      const reqOrigin = ctx.request.header.origin;
-      if (!reqOrigin) return '*';
-      return reqOrigin === 'http://localhost:5173' ? reqOrigin : '';
-    }
-  })
-);
 app.use(bodyParser({ enableTypes: ['json'] }));
 app.use(authOptional);
 

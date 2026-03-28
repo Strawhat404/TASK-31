@@ -32,6 +32,24 @@ function getBayNumber(metadata) {
   }
 }
 
+function filterBayCandidates(rows, heavyDuty) {
+  return rows.filter((r) => {
+    const bayNo = getBayNumber(r.metadata);
+    if (!heavyDuty) return true;
+    return bayNo >= 3 && bayNo <= 6;
+  });
+}
+
+function shouldScheduleRecalibration(nextTestCount) {
+  return Number(nextTestCount) % RECALIBRATION_AFTER_TESTS === 0;
+}
+
+function getRecalibrationWindow(baseSlotStart) {
+  const start = addMinutes(new Date(baseSlotStart), SLOT_MINUTES);
+  const end = addMinutes(start, RECALIBRATION_MINUTES);
+  return { start, end };
+}
+
 async function selectAvailableInspector({ locationCode, departmentCode, slotStart }) {
   const rows = await query(
     `SELECT u.id
@@ -65,11 +83,7 @@ async function selectAvailableBay({ locationCode, departmentCode, slotStart, hea
     [slotStart, locationCode, departmentCode]
   );
 
-  const filtered = rows.filter((r) => {
-    const bayNo = getBayNumber(r.metadata);
-    if (!heavyDuty) return true;
-    return bayNo >= 3 && bayNo <= 6;
-  });
+  const filtered = filterBayCandidates(rows, heavyDuty);
 
   return filtered[0]?.id || null;
 }
@@ -118,9 +132,8 @@ async function maybeReserveRecalibration(equipmentResourceId, baseSlotStart) {
     );
   }
 
-  if (next % RECALIBRATION_AFTER_TESTS === 0) {
-    const start = addMinutes(new Date(baseSlotStart), SLOT_MINUTES);
-    const end = addMinutes(start, RECALIBRATION_MINUTES);
+  if (shouldScheduleRecalibration(next)) {
+    const { start, end } = getRecalibrationWindow(baseSlotStart);
     await query(
       `INSERT INTO maintenance_windows (equipment_resource_id, reason, starts_at, ends_at)
        VALUES (?, 'automatic_recalibration', ?, ?)`,
@@ -313,5 +326,11 @@ export async function listMaintenanceWindows({ locationCode, departmentCode }) {
 export const _testables = {
   normalizeSlotStart,
   isHeavyVehicle,
-  getBayNumber
+  getBayNumber,
+  filterBayCandidates,
+  shouldScheduleRecalibration,
+  getRecalibrationWindow,
+  SLOT_MINUTES,
+  RECALIBRATION_AFTER_TESTS,
+  RECALIBRATION_MINUTES
 };

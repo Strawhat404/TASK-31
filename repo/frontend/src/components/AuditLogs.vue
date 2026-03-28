@@ -2,7 +2,11 @@
   <section class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
     <div class="flex items-center justify-between gap-3">
       <h2 class="text-xl font-semibold">Audit Logs</h2>
-      <button class="rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="load(1)">Refresh</button>
+      <div class="flex items-center gap-2">
+        <button class="rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="exportLedger">Export Ledger</button>
+        <button class="rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="purgeRetention">Purge >2y</button>
+        <button class="rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="load(1)">Refresh</button>
+      </div>
     </div>
 
     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
@@ -23,6 +27,7 @@
     <button class="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="load(1)">Apply Filters</button>
 
     <p v-if="error" class="mt-3 text-sm text-red-600">{{ error }}</p>
+    <p v-if="info" class="mt-2 text-sm text-emerald-700">{{ info }}</p>
 
     <div class="mt-4 overflow-x-auto">
       <table class="w-full border-collapse text-sm">
@@ -60,12 +65,13 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue';
-import { apiGet } from '../services/api.js';
+import { apiGet, apiPost } from '../services/api.js';
 
 const props = defineProps({ token: { type: String, required: true } });
 
 const rows = ref([]);
 const error = ref('');
+const info = ref('');
 const page = ref(1);
 const totalPages = ref(1);
 
@@ -97,6 +103,7 @@ function toQs() {
 async function load(nextPage = page.value) {
   page.value = nextPage;
   error.value = '';
+  info.value = '';
   try {
     const data = await apiGet(`/api/audit-events?${toQs()}`, props.token);
     rows.value = data.rows || [];
@@ -107,7 +114,35 @@ async function load(nextPage = page.value) {
   }
 }
 
+async function exportLedger() {
+  error.value = '';
+  info.value = '';
+  try {
+    const data = await apiPost('/api/audit-events/export', { output_dir: '/tmp' }, props.token);
+    info.value = `Exported ${data.exported || 0} rows to ${data.filePath || 'local file'}`;
+  } catch (err) {
+    error.value = err.message || 'Failed to export audit ledger';
+  }
+}
+
+async function purgeRetention() {
+  if (!confirm('Are you sure?')) return;
+  error.value = '';
+  info.value = '';
+  try {
+    const data = await apiPost('/api/audit-events/retention/purge', {}, props.token);
+    info.value = `Purged ${data.purged || 0} events older than ${data.retentionYears || 2} years`;
+    await load(1);
+  } catch (err) {
+    error.value = err.message || 'Failed to purge retained events';
+  }
+}
+
 onMounted(async () => {
-  await load(1);
+  try {
+    await load(1);
+  } catch (err) {
+    error.value = err.message || 'Failed to initialize audit logs';
+  }
 });
 </script>

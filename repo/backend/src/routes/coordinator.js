@@ -2,6 +2,7 @@ import Router from 'koa-router';
 import { authRequired } from '../middleware/auth.js';
 import { enforceScope, requireRoles } from '../middleware/rbac.js';
 import { logAuditEvent } from '../utils/audit.js';
+import { query } from '../db.js';
 import {
   assignSeatToAppointment,
   listMaintenanceWindows,
@@ -23,11 +24,36 @@ router.post(
     const body = ctx.request.body || {};
     const locationCode = body.location_code || ctx.state.user.locationCode;
     const departmentCode = body.department_code || ctx.state.user.departmentCode;
+    const customerId = Number(body.customer_id || 0);
+
+    if (!customerId) {
+      ctx.status = 400;
+      ctx.body = { error: 'customer_id is required' };
+      return;
+    }
+
+    const lockRows = await query(
+      `SELECT id
+       FROM appointments
+       WHERE coordinator_id = ?
+         AND customer_id = ?
+         AND location_code = ?
+         AND department_code = ?
+         AND created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 5 MINUTE)
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [ctx.state.user.id, customerId, locationCode, departmentCode]
+    );
+    if (lockRows.length) {
+      ctx.status = 409;
+      ctx.body = { error: 'Submission lock active for 5 minutes. Retry later.' };
+      return;
+    }
 
     let result;
     try {
       result = await scheduleAppointment({
-        customerId: body.customer_id,
+        customerId,
         coordinatorId: ctx.state.user.id,
         locationCode,
         departmentCode,
