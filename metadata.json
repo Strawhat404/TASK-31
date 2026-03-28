@@ -1,0 +1,9 @@
+{
+  "prompt": "Create a RoadSafe Inspection Operations platform...",
+  "project_type": "fullstack",
+  "frontend_language": "javascript",
+  "backend_language": "nodejs",
+  "frontend_framework": "vue",
+  "backend_framework": "koa",
+  "database": "mysql"
+}

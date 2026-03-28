@@ -1,0 +1,64 @@
+services:
+  mysql:
+    image: mysql:8.4
+    restart: on-failure
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: roadsafe
+      MYSQL_USER: roadsafe
+      MYSQL_PASSWORD: roadsafe_password
+    volumes:
+      - mysql_data:/var/lib/mysql:z
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro,z
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-proot_password']
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: on-failure
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: roadsafe
+      DB_USER: roadsafe
+      DB_PASSWORD: roadsafe_password
+      SESSION_TTL_HOURS: 8
+      IP_RATE_LIMIT_PER_MIN: 300
+      USER_RATE_LIMIT_PER_MIN: 60
+      TLS_ENABLED: 'true'
+      TLS_CERT_PATH: ./certs/server.crt
+      TLS_KEY_PATH: ./certs/server.key
+      AES_256_KEY_HEX: PLACEHOLDER_64_HEX_CHARS_FOR_AES_256
+    ports:
+      - '4000:4000'
+    healthcheck:
+      test: ['CMD', 'node', 'src/healthcheck.js']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: on-failure
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - '5173:80'
+
+volumes:
+  mysql_data:
