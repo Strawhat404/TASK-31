@@ -4,7 +4,7 @@ import { authRequired } from '../middleware/auth.js';
 import { requireRoles } from '../middleware/rbac.js';
 import { exportAuditLedger, purgeExpiredAuditEvents } from '../services/auditRetentionService.js';
 
-const router = new Router({ prefix: '/api/audit-events' });
+const router = new Router({ prefix: '/api/audit' });
 
 function parsePage(value, fallback) {
   const parsed = Number.parseInt(String(value || ''), 10);
@@ -12,7 +12,7 @@ function parsePage(value, fallback) {
   return parsed;
 }
 
-router.get('/', authRequired, requireRoles('Administrator'), async (ctx) => {
+router.get('/events', authRequired, requireRoles('Administrator'), async (ctx) => {
   const page = parsePage(ctx.query.page, 1);
   const pageSize = Math.min(parsePage(ctx.query.pageSize, 25), 100);
   const offset = (page - 1) * pageSize;

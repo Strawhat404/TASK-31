@@ -125,9 +125,9 @@ export async function autocomplete(prefix, actor = null) {
         LEFT JOIN appointments a ON a.id = vr.appointment_id
         WHERE a.location_code = ? AND a.department_code = ?
         UNION ALL
-        SELECT sql.raw_query AS term 
-        FROM search_query_logs sql
-        JOIN users u ON u.id = sql.user_id
+        SELECT sql_log.raw_query AS term 
+        FROM search_query_logs sql_log
+        JOIN users u ON u.id = sql_log.user_id
         WHERE u.location_code = ? AND u.department_code = ?
       ) x
       WHERE term LIKE ?
@@ -159,14 +159,14 @@ export async function trendingKeywords(actor = null) {
   // Scope-isolated trending for non-admin users
   if (actor && actor.role !== 'Administrator') {
     const rows = await query(
-      `SELECT sql.raw_query AS keyword, COUNT(*) AS uses
-       FROM search_query_logs sql
-       JOIN users u ON u.id = sql.user_id
-       WHERE sql.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)
-         AND sql.raw_query <> ''
+      `SELECT sql_log.raw_query AS keyword, COUNT(*) AS uses
+       FROM search_query_logs sql_log
+       JOIN users u ON u.id = sql_log.user_id
+       WHERE sql_log.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)
+         AND sql_log.raw_query <> ''
          AND u.location_code = ?
          AND u.department_code = ?
-       GROUP BY sql.raw_query
+       GROUP BY sql_log.raw_query
        ORDER BY uses DESC, keyword ASC
        LIMIT 10`,
       [actor.locationCode, actor.departmentCode]
