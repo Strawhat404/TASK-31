@@ -1,7 +1,9 @@
 import Router from 'koa-router';
+import fs from 'fs';
 import { authRequired } from '../middleware/auth.js';
 import { enforceScope, requireRoles } from '../middleware/rbac.js';
-import { validateAndIngestFile } from '../services/fileGovernanceService.js';
+import { findAuthorizedFileDownload, validateAndIngestFile } from '../services/fileGovernanceService.js';
+import { config } from '../config.js';
 import { logAuditEvent } from '../utils/audit.js';
 
 const router = new Router({ prefix: '/api/files' });
@@ -40,5 +42,45 @@ router.post(
     ctx.body = result;
   }
 );
+
+router.get('/download/:id', authRequired, async (ctx) => {
+  const fileId = Number.parseInt(String(ctx.params.id || ''), 10);
+  if (!Number.isFinite(fileId) || fileId < 1) {
+    ctx.status = 400;
+    ctx.body = { error: 'Invalid file id' };
+    return;
+  }
+
+  const referer = String(ctx.get('Referer') || '');
+  if (!referer || !referer.startsWith(config.frontend.origin)) {
+    ctx.status = 403;
+    ctx.body = { error: 'Hotlink protection blocked this download request' };
+    return;
+  }
+
+  const file = await findAuthorizedFileDownload({
+    fileId,
+    actor: ctx.state.user
+  });
+  if (!file) {
+    ctx.status = 404;
+    ctx.body = { error: 'File not found' };
+    return;
+  }
+
+  await logAuditEvent({
+    actorUserId: ctx.state.user.id,
+    actorRole: ctx.state.user.role,
+    action: 'file.download',
+    targetTable: 'files',
+    targetRecordId: file.id,
+    locationCode: file.location_code,
+    departmentCode: file.department_code
+  });
+
+  ctx.set('Content-Type', file.mime_type || 'application/octet-stream');
+  ctx.set('Content-Disposition', `attachment; filename="${file.file_name}"`);
+  ctx.body = fs.createReadStream(file.storage_path);
+});
 
 export default router;

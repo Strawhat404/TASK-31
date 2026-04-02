@@ -3,3 +3,11 @@ dist/
 .env
 .DS_Store
 *.log
+.tmp/
+.vscode/
+
+# AI acceptance self-test audit documents
+delivery_acceptance_audit.md
+delivery_acceptance_audit_report.md
+frontend_delivery_acceptance_audit_report.md
+roadsafe_audit_report_full.md

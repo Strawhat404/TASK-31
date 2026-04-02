@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://localhost:4000';
 
 function authHeaders(token) {
   return token ? { Authorization: `Bearer ${token}`, 'X-CSRF-Token': token } : {};

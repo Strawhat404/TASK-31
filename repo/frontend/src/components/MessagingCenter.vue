@@ -24,13 +24,25 @@
       <textarea v-model="compose.body" rows="3" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2"></textarea>
     </label>
 
-    <button class="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white" @click="send">Queue Message</button>
+    <button class="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loading" @click="send">
+      {{ loading ? 'Sending...' : 'Queue Message' }}
+    </button>
 
     <h3 class="mt-5 text-lg font-semibold">Inbox</h3>
     <div class="mt-2 overflow-x-auto">
       <table class="w-full border-collapse text-sm">
         <thead><tr class="bg-slate-50"><th class="border border-slate-200 px-2 py-2 text-left">Type</th><th class="border border-slate-200 px-2 py-2 text-left">Subject</th><th class="border border-slate-200 px-2 py-2 text-left">Body</th></tr></thead>
         <tbody>
+          <tr v-if="!loadingInbox && inboxRows.length === 0">
+            <td colspan="3" class="border border-slate-200 px-2 py-4 text-center text-sm text-slate-500">
+              No messages in your inbox.
+            </td>
+          </tr>
+          <tr v-else-if="loadingInbox">
+            <td colspan="3" class="border border-slate-200 px-2 py-4 text-center text-sm text-slate-500">
+              Loading...
+            </td>
+          </tr>
           <tr v-for="m in inboxRows" :key="m.id">
             <td class="border border-slate-200 px-2 py-2">{{ m.message_type }}</td>
             <td class="border border-slate-200 px-2 py-2">{{ m.subject }}</td>
@@ -40,7 +52,9 @@
       </table>
     </div>
 
-    <button class="mt-4 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="exportOutbox">Export Manual Outbox</button>
+    <button class="mt-4 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loadingExport" @click="exportOutbox">
+      {{ loadingExport ? 'Exporting...' : 'Export Manual Outbox' }}
+    </button>
     <p v-if="outboxNotice" class="mt-2 text-sm text-slate-600">{{ outboxNotice }}</p>
   </section>
 </template>
@@ -62,22 +76,33 @@ const compose = reactive({
 const inboxRows = ref([]);
 const outboxNotice = ref('');
 const error = ref('');
+const loading = ref(false);
+const loadingInbox = ref(false);
+const loadingExport = ref(false);
 
 async function loadInbox() {
-  const data = await apiGet('/api/messages/inbox', props.token);
-  inboxRows.value = data.messages || [];
+  loadingInbox.value = true;
+  try {
+    const data = await apiGet('/api/messages/inbox', props.token);
+    inboxRows.value = data.messages || [];
+  } finally {
+    loadingInbox.value = false;
+  }
 }
 
 async function send() {
   if (!confirm('Are you sure?')) return;
 
   error.value = '';
+  loading.value = true;
   try {
     await apiPost('/api/messages/send', props.token, compose);
     compose.body = '';
     await loadInbox();
   } catch (err) {
     error.value = err.message || 'Failed to send message';
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -85,11 +110,14 @@ async function exportOutbox() {
   if (!confirm('Are you sure?')) return;
 
   error.value = '';
+  loadingExport.value = true;
   try {
     const data = await apiPost('/api/messages/outbox/export', props.token, {});
     outboxNotice.value = `Exported ${data.exported} payload(s).`;
   } catch (err) {
     error.value = err.message || 'Failed to export outbox';
+  } finally {
+    loadingExport.value = false;
   }
 }
 

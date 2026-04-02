@@ -11,6 +11,14 @@ function buildWhere(filters, params, actor = null) {
     params.push(actor.id);
   }
 
+  // Enforce scope isolation for non-admin users at SQL level
+  if (actor && actor.role !== 'Administrator') {
+    where.push('a.location_code = ?');
+    params.push(actor.locationCode);
+    where.push('a.department_code = ?');
+    params.push(actor.departmentCode);
+  }
+
   if (safeFilters.brand) {
     where.push('brand = ?');
     params.push(safeFilters.brand);
@@ -100,8 +108,37 @@ export async function logSearch(userId, rawQuery, filters) {
   );
 }
 
-export async function autocomplete(prefix) {
+export async function autocomplete(prefix, actor = null) {
   const p = `${String(prefix || '').trim()}%`;
+  
+  // Scope-isolated autocomplete for non-admin users
+  if (actor && actor.role !== 'Administrator') {
+    const rows = await query(
+      `SELECT DISTINCT term FROM (
+        SELECT vr.brand AS term 
+        FROM vehicle_records vr
+        LEFT JOIN appointments a ON a.id = vr.appointment_id
+        WHERE a.location_code = ? AND a.department_code = ?
+        UNION ALL
+        SELECT vr.model_name AS term 
+        FROM vehicle_records vr
+        LEFT JOIN appointments a ON a.id = vr.appointment_id
+        WHERE a.location_code = ? AND a.department_code = ?
+        UNION ALL
+        SELECT sql.raw_query AS term 
+        FROM search_query_logs sql
+        JOIN users u ON u.id = sql.user_id
+        WHERE u.location_code = ? AND u.department_code = ?
+      ) x
+      WHERE term LIKE ?
+      ORDER BY term ASC
+      LIMIT 10`,
+      [actor.locationCode, actor.departmentCode, actor.locationCode, actor.departmentCode, actor.locationCode, actor.departmentCode, p]
+    );
+    return rows.map((r) => r.term);
+  }
+  
+  // Admin gets global autocomplete
   const rows = await query(
     `SELECT DISTINCT term FROM (
       SELECT brand AS term FROM vehicle_records
@@ -118,7 +155,26 @@ export async function autocomplete(prefix) {
   return rows.map((r) => r.term);
 }
 
-export async function trendingKeywords() {
+export async function trendingKeywords(actor = null) {
+  // Scope-isolated trending for non-admin users
+  if (actor && actor.role !== 'Administrator') {
+    const rows = await query(
+      `SELECT sql.raw_query AS keyword, COUNT(*) AS uses
+       FROM search_query_logs sql
+       JOIN users u ON u.id = sql.user_id
+       WHERE sql.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 7 DAY)
+         AND sql.raw_query <> ''
+         AND u.location_code = ?
+         AND u.department_code = ?
+       GROUP BY sql.raw_query
+       ORDER BY uses DESC, keyword ASC
+       LIMIT 10`,
+      [actor.locationCode, actor.departmentCode]
+    );
+    return rows;
+  }
+  
+  // Admin gets global trending
   const rows = await query(
     `SELECT raw_query AS keyword, COUNT(*) AS uses
      FROM search_query_logs

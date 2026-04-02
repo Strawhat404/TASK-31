@@ -27,7 +27,7 @@ import inspectionsRoutes from './routes/inspections.js';
 const app = new Koa();
 
 app.use(async (ctx, next) => {
-  const allowedOrigin = 'http://localhost:5173';
+  const allowedOrigin = config.frontend.origin;
   const requestOrigin = ctx.get('Origin');
 
   if (requestOrigin === allowedOrigin) {
@@ -111,6 +111,10 @@ app.use(auditRoutes.routes()).use(auditRoutes.allowedMethods());
 app.use(inspectionsRoutes.routes()).use(inspectionsRoutes.allowedMethods());
 
 function createServer() {
+  if (config.nodeEnv === 'production' && !config.tls.enabled) {
+    throw new Error('TLS must remain enabled in production');
+  }
+
   if (!config.tls.enabled) {
     return http.createServer(app.callback());
   }

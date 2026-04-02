@@ -23,7 +23,9 @@
       </label>
     </div>
 
-    <button class="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white" @click="schedule">Create Appointment</button>
+    <button class="mt-3 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loading" @click="schedule">
+      {{ loading ? 'Creating...' : 'Create Appointment' }}
+    </button>
 
     <h3 class="mt-5 text-lg font-semibold">Waiting Room Seats</h3>
     <div class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-6 lg:grid-cols-8">
@@ -46,7 +48,9 @@
       </select>
     </label>
 
-    <button class="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm" @click="saveSeats">Save Seat Layout</button>
+    <button class="mt-3 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loading" @click="saveSeats">
+      {{ loading ? 'Saving...' : 'Save Seat Layout' }}
+    </button>
   </section>
 </template>
 
@@ -58,6 +62,7 @@ const props = defineProps({ token: { type: String, required: true } });
 
 const message = ref('');
 const error = ref('');
+const loading = ref(false);
 const form = reactive({
   customer_id: 1,
   vehicle_type: 'light',
@@ -88,6 +93,7 @@ async function schedule() {
 
   message.value = '';
   error.value = '';
+  loading.value = true;
   try {
     const payload = {
       customer_id: Number(form.customer_id),
@@ -101,11 +107,14 @@ async function schedule() {
     await refresh();
   } catch (err) {
     error.value = err.message || 'Failed to schedule appointment';
+  } finally {
+    loading.value = false;
   }
 }
 
 async function assignSeat(seat) {
   error.value = '';
+  loading.value = true;
   try {
     await apiPost('/api/coordinator/waiting-room/assign-seat', props.token, {
       seat_id: seat.id,
@@ -114,6 +123,8 @@ async function assignSeat(seat) {
     await refresh();
   } catch (err) {
     error.value = err.message || 'Failed to assign seat';
+  } finally {
+    loading.value = false;
   }
 }
 
@@ -121,11 +132,14 @@ async function saveSeats() {
   if (!confirm('Are you sure?')) return;
 
   error.value = '';
+  loading.value = true;
   try {
     await apiPut('/api/coordinator/waiting-room/seats', props.token, { seats: seats.value });
     message.value = 'Seat layout saved';
   } catch (err) {
     error.value = err.message || 'Failed to save seat layout';
+  } finally {
+    loading.value = false;
   }
 }
 

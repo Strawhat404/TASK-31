@@ -38,9 +38,12 @@ services:
       SESSION_TTL_HOURS: 8
       IP_RATE_LIMIT_PER_MIN: 300
       USER_RATE_LIMIT_PER_MIN: 60
-      TLS_ENABLED: 'false'
+      TLS_ENABLED: 'true'
       TLS_CERT_PATH: ./certs/server.crt
       TLS_KEY_PATH: ./certs/server.key
+      FRONTEND_ORIGIN: http://localhost:5173
+      SENSITIVE_REGEX_RULES: ssn::\\b\\d{3}-\\d{2}-\\d{4}\\b,ssn_compact::\\b\\d{9}\\b
+      SENSITIVE_DICTIONARY_TERMS: social security number,ssn
       DATA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       AES_256_KEY_HEX: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     ports:

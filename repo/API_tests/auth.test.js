@@ -47,7 +47,7 @@ async function login(base, username, password) {
 
 test('auth flow: login, password complexity rejection, 401 and 403 scope denials', async (t) => {
   const base = await resolveBase();
-  if (!base) t.skip('API not reachable');
+  if (!base) return t.skip('API not reachable');
 
   const unauthorized = await request(base, '/api/users?page=1&pageSize=5');
   assert.equal(unauthorized.status, 401);

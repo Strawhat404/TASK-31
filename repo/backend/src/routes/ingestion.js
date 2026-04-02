@@ -14,6 +14,8 @@ router.post('/jobs', authRequired, requireRoles('Data Engineer', 'Administrator'
   const body = ctx.request.body || {};
   const payload = {
     csvPath: body.csv_path,
+    deviceExportPath: body.device_export_path,
+    sourcePath: body.source_path,
     datasetName: body.dataset_name,
     sourceSystem: body.source_system || 'csv_drop'
   };

@@ -55,7 +55,7 @@ async function createUser(base, adminToken, payload) {
 
 test('security: IDOR seat assignment blocked and sensitive fields masked for non-admin', async (t) => {
   const base = await resolveBase();
-  if (!base) t.skip('API not reachable');
+  if (!base) return t.skip('API not reachable');
 
   const adminToken = await login(base, 'admin', 'Admin@123456');
 

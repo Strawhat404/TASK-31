@@ -16,7 +16,7 @@ docker compose up
 ```
 
 **Services:**
-- Backend API: http://localhost:4000
+- Backend API: https://localhost:4000
 - Frontend UI: http://localhost:5173
 
 **Default Admin Credentials:**

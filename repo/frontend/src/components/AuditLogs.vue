@@ -118,7 +118,7 @@ async function exportLedger() {
   error.value = '';
   info.value = '';
   try {
-    const data = await apiPost('/api/audit-events/export', { output_dir: '/tmp' }, props.token);
+    const data = await apiPost('/api/audit-events/export', props.token, { output_dir: '/tmp' });
     info.value = `Exported ${data.exported || 0} rows to ${data.filePath || 'local file'}`;
   } catch (err) {
     error.value = err.message || 'Failed to export audit ledger';
@@ -130,7 +130,7 @@ async function purgeRetention() {
   error.value = '';
   info.value = '';
   try {
-    const data = await apiPost('/api/audit-events/retention/purge', {}, props.token);
+    const data = await apiPost('/api/audit-events/retention/purge', props.token, {});
     info.value = `Purged ${data.purged || 0} events older than ${data.retentionYears || 2} years`;
     await load(1);
   } catch (err) {

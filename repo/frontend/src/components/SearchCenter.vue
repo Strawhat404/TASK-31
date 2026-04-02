@@ -77,7 +77,9 @@
       </aside>
     </div>
 
-    <button class="mt-4 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white" @click="search(1)">Search</button>
+    <button class="mt-4 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed" :disabled="loading" @click="search(1)">
+      {{ loading ? 'Searching...' : 'Search' }}
+    </button>
 
     <p v-if="error" class="mt-3 text-sm text-red-600">{{ error }}</p>
 
@@ -106,6 +108,16 @@
           </tr>
         </thead>
         <tbody>
+          <tr v-if="!loading && hasSearched && rows.length === 0">
+            <td colspan="6" class="border border-slate-200 px-2 py-4 text-center text-sm text-slate-500">
+              No results found. Try adjusting your search filters.
+            </td>
+          </tr>
+          <tr v-else-if="loading">
+            <td colspan="6" class="border border-slate-200 px-2 py-4 text-center text-sm text-slate-500">
+              Loading...
+            </td>
+          </tr>
           <tr v-for="r in rows" :key="r.id">
             <td class="border border-slate-200 px-2 py-2">{{ r.brand }}</td>
             <td class="border border-slate-200 px-2 py-2">{{ r.model_name }}</td>
@@ -152,6 +164,8 @@ const page = ref(1);
 const autocomplete = ref([]);
 const trending = ref([]);
 const error = ref('');
+const loading = ref(false);
+const hasSearched = ref(false);
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / 25)));
 
@@ -190,6 +204,8 @@ async function loadTrending() {
 async function search(nextPage = 1) {
   page.value = nextPage;
   error.value = '';
+  loading.value = true;
+  hasSearched.value = true;
   try {
     const qs = toQs({ ...filters, page: page.value });
     const data = await apiGet(`/api/search/vehicles?${qs}`, props.token);
@@ -198,6 +214,8 @@ async function search(nextPage = 1) {
     await loadTrending();
   } catch (err) {
     error.value = err.message || 'Search failed';
+  } finally {
+    loading.value = false;
   }
 }
 

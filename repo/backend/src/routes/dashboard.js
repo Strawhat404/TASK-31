@@ -45,6 +45,80 @@ router.get('/summary', authRequired, enforceScope(), async (ctx) => {
   }
 
   const rows = await query(sql, params);
+  
+  // Fetch today's appointments
+  let todaysAppointments = [];
+  if (user.role === 'Administrator') {
+    todaysAppointments = await query(
+      `SELECT a.id, a.scheduled_at, a.status, u.full_name AS customer_name, 
+              JSON_UNQUOTE(JSON_EXTRACT(a.notes, '$.vehicle_type')) AS vehicle_type
+       FROM appointments a
+       JOIN users u ON u.id = a.customer_id
+       WHERE DATE(a.scheduled_at) = UTC_DATE()
+       ORDER BY a.scheduled_at ASC
+       LIMIT 20`
+    );
+  } else {
+    todaysAppointments = await query(
+      `SELECT a.id, a.scheduled_at, a.status, u.full_name AS customer_name,
+              JSON_UNQUOTE(JSON_EXTRACT(a.notes, '$.vehicle_type')) AS vehicle_type
+       FROM appointments a
+       JOIN users u ON u.id = a.customer_id
+       WHERE DATE(a.scheduled_at) = UTC_DATE()
+         AND a.location_code = ?
+         AND a.department_code = ?
+       ORDER BY a.scheduled_at ASC
+       LIMIT 20`,
+      [user.locationCode, user.departmentCode]
+    );
+  }
+
+  // Fetch resource utilization
+  let resourceUtilization = {};
+  if (user.role === 'Administrator') {
+    const utilRows = await query(
+      `SELECT
+        (SELECT COUNT(*) FROM facilities_resources WHERE resource_type = 'inspection_bay' AND is_active = 1) AS total_bays,
+        (SELECT COUNT(DISTINCT bay_resource_id) FROM bay_capacity_locks WHERE slot_start <= UTC_TIMESTAMP() AND slot_end >= UTC_TIMESTAMP()) AS bays_in_use,
+        (SELECT COUNT(*) FROM facilities_resources WHERE resource_type = 'equipment' AND is_active = 1) AS total_equipment,
+        (SELECT COUNT(DISTINCT equipment_resource_id) FROM bay_capacity_locks WHERE slot_start <= UTC_TIMESTAMP() AND slot_end >= UTC_TIMESTAMP()) AS equipment_in_use`
+    );
+    resourceUtilization = utilRows[0] || {};
+  } else {
+    const utilRows = await query(
+      `SELECT
+        (SELECT COUNT(*) FROM facilities_resources WHERE resource_type = 'inspection_bay' AND is_active = 1 AND location_code = ? AND department_code = ?) AS total_bays,
+        (SELECT COUNT(DISTINCT bay_resource_id) FROM bay_capacity_locks bcl JOIN facilities_resources fr ON fr.id = bcl.bay_resource_id WHERE bcl.slot_start <= UTC_TIMESTAMP() AND bcl.slot_end >= UTC_TIMESTAMP() AND fr.location_code = ? AND fr.department_code = ?) AS bays_in_use,
+        (SELECT COUNT(*) FROM facilities_resources WHERE resource_type = 'equipment' AND is_active = 1 AND location_code = ? AND department_code = ?) AS total_equipment,
+        (SELECT COUNT(DISTINCT equipment_resource_id) FROM bay_capacity_locks bcl JOIN facilities_resources fr ON fr.id = bcl.equipment_resource_id WHERE bcl.slot_start <= UTC_TIMESTAMP() AND bcl.slot_end >= UTC_TIMESTAMP() AND fr.location_code = ? AND fr.department_code = ?) AS equipment_in_use`,
+      [user.locationCode, user.departmentCode, user.locationCode, user.departmentCode, user.locationCode, user.departmentCode, user.locationCode, user.departmentCode]
+    );
+    resourceUtilization = utilRows[0] || {};
+  }
+
+  // Fetch ingestion health
+  const ingestionHealth = {};
+  if (['Administrator', 'Data Engineer', 'Coordinator'].includes(user.role)) {
+    const healthRows = await query(
+      `SELECT
+        (SELECT COUNT(*) FROM ingestion_jobs WHERE status = 'queued') AS queued,
+        (SELECT COUNT(*) FROM ingestion_jobs WHERE status = 'running') AS running,
+        (SELECT COUNT(*) FROM ingestion_jobs WHERE status = 'failed' AND updated_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 24 HOUR)) AS failed_24h`
+    );
+    ingestionHealth.queued = healthRows[0]?.queued ?? 0;
+    ingestionHealth.running = healthRows[0]?.running ?? 0;
+    ingestionHealth.failed_24h = healthRows[0]?.failed_24h ?? 0;
+
+    const recentJobs = await query(
+      `SELECT id, job_type, status, started_at
+       FROM ingestion_jobs
+       WHERE started_at IS NOT NULL
+       ORDER BY started_at DESC
+       LIMIT 5`
+    );
+    ingestionHealth.recent_jobs = recentJobs;
+  }
+
   ctx.body = {
     user,
     metrics: rows[0] || {
@@ -54,7 +128,10 @@ router.get('/summary', authRequired, enforceScope(), async (ctx) => {
       active_resources: 0,
       ingestion_running: 0,
       ingestion_failed: 0
-    }
+    },
+    todaysAppointments,
+    resourceUtilization,
+    ingestionHealth
   };
 });
 

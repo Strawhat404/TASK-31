@@ -30,12 +30,12 @@ router.get('/vehicles', authRequired, enforceScope(), async (ctx) => {
 });
 
 router.get('/autocomplete', authRequired, async (ctx) => {
-  const rows = await autocomplete(ctx.query.prefix || '');
+  const rows = await autocomplete(ctx.query.prefix || '', ctx.state.user);
   ctx.body = { suggestions: rows };
 });
 
 router.get('/trending', authRequired, async (ctx) => {
-  const rows = await trendingKeywords();
+  const rows = await trendingKeywords(ctx.state.user);
   ctx.body = { keywords: rows };
 });
 

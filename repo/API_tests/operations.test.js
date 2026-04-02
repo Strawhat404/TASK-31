@@ -71,7 +71,7 @@ function slotAt(daysFromNow, hour, minute) {
 
 test('operations: duplicate appointment conflict and 5-minute submission lock', async (t) => {
   const base = await resolveBase();
-  if (!base) t.skip('API not reachable');
+  if (!base) return t.skip('API not reachable');
 
   const adminToken = await login(base, 'admin', 'Admin@123456');
 

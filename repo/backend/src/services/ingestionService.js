@@ -6,6 +6,7 @@ import { query } from '../db.js';
 const MAX_BACKFILL_DAYS = 30;
 const MAX_RETRIES = 5;
 const CONNECTOR_CSV = 'csv';
+const CONNECTOR_DEVICE_EXPORT = 'device_export';
 const CONNECTOR_NETWORK_SHARE_STUB = 'network_share_stub';
 
 function parseCsv(content) {
@@ -93,6 +94,30 @@ function normalizedRow(raw) {
     ...raw,
     distance_km: milesToKilometers(raw.distance_miles),
     price_usd: convertToUsd(raw.price_amount, raw.price_currency)
+  };
+}
+
+function parseJsonRows(content) {
+  const parsed = JSON.parse(content);
+  if (Array.isArray(parsed)) return parsed;
+  if (parsed && Array.isArray(parsed.records)) return parsed.records;
+  if (parsed && typeof parsed === 'object') return [parsed];
+  return [];
+}
+
+function normalizeDeviceExportRow(raw) {
+  const safe = raw && typeof raw === 'object' ? raw : {};
+  return {
+    vehicle_plate: safe.vehicle_plate || safe.plate || safe.plate_number || '',
+    customer_id: String(safe.customer_id || safe.customerId || safe.owner_id || ''),
+    appointment_ts: safe.appointment_ts || safe.appointment_time || safe.test_time || '',
+    location_code: safe.location_code || safe.location || 'HQ',
+    department_code: safe.department_code || safe.department || 'OPS',
+    distance_miles: safe.distance_miles || safe.odometer_miles || 0,
+    price_amount: safe.price_amount || safe.fee_amount || 0,
+    price_currency: safe.price_currency || safe.currency || 'USD',
+    source_device_id: safe.source_device_id || safe.device_id || '',
+    export_batch_id: safe.export_batch_id || safe.batch_id || ''
   };
 }
 
@@ -265,23 +290,18 @@ async function loadCheckpoint(jobId, key) {
   return rows[0]?.checkpoint_value ?? null;
 }
 
-async function processCsvJob(jobId, payload) {
-  const csvPath = payload.csvPath;
-  const datasetName = payload.datasetName || 'inspection_ingest';
-  if (!csvPath || !fs.existsSync(csvPath)) {
-    throw new Error('CSV source not found');
-  }
-
-  const content = fs.readFileSync(path.resolve(csvPath), 'utf8');
-  const parsed = parseCsv(content);
-  const resumeFromRaw = await loadCheckpoint(jobId, 'last_processed_row');
-  const resumeFrom = Math.max(0, Number(resumeFromRaw || 0));
-  const resumeSlice = parsed.slice(resumeFrom);
-  const normalized = resumeSlice.map(normalizedRow);
-  const { rows, duplicateCount } = dedupeRows(normalized);
-
+async function persistDatasetVersion({
+  jobId,
+  datasetName,
+  parsedRows,
+  rows,
+  duplicateCount,
+  sourceSystem,
+  sourcePath,
+  transformations
+}) {
   const missingFieldsRate = getMissingFieldsRate(rows);
-  const duplicateRate = resumeSlice.length ? Number((duplicateCount / resumeSlice.length).toFixed(5)) : 0;
+  const duplicateRate = parsedRows.length ? Number((duplicateCount / parsedRows.length).toFixed(5)) : 0;
 
   const versionNo = await nextDatasetVersion(datasetName);
   await query(
@@ -296,9 +316,9 @@ async function processCsvJob(jobId, payload) {
       missingFieldsRate,
       duplicateRate,
       JSON.stringify({
-        sourceSystem: payload.sourceSystem || 'csv',
-        sourcePath: csvPath,
-        transformations: ['miles_to_km', 'currency_to_usd', 'deterministic_dedupe'],
+        sourceSystem,
+        sourcePath,
+        transformations,
         checkpoints: ['parsed', 'normalized', 'deduped']
       })
     ]
@@ -308,7 +328,7 @@ async function processCsvJob(jobId, payload) {
   const datasetVersionId = vrows[0].id;
 
   const snapshot = buildCheckpointSnapshot({
-    parsedRows: parsed.length,
+    parsedRows: parsedRows.length,
     writtenRows: rows.length,
     versionNo
   });
@@ -342,17 +362,135 @@ async function processCsvJob(jobId, payload) {
   }
 }
 
+async function processCsvJob(jobId, payload) {
+  const csvPath = payload.csvPath;
+  const datasetName = payload.datasetName || 'inspection_ingest';
+  if (!csvPath || !fs.existsSync(csvPath)) {
+    throw new Error('CSV source not found');
+  }
+
+  const content = fs.readFileSync(path.resolve(csvPath), 'utf8');
+  const parsed = parseCsv(content);
+  const resumeFromRaw = await loadCheckpoint(jobId, 'last_processed_row');
+  const resumeFrom = Math.max(0, Number(resumeFromRaw || 0));
+  const resumeSlice = parsed.slice(resumeFrom);
+  const normalized = resumeSlice.map(normalizedRow);
+  const { rows, duplicateCount } = dedupeRows(normalized);
+  await persistDatasetVersion({
+    jobId,
+    datasetName,
+    parsedRows: resumeSlice,
+    rows,
+    duplicateCount,
+    sourceSystem: payload.sourceSystem || 'csv',
+    sourcePath: csvPath,
+    transformations: ['miles_to_km', 'currency_to_usd', 'deterministic_dedupe']
+  });
+}
+
+async function processDeviceExportJob(jobId, payload) {
+  const exportPath = payload.deviceExportPath || payload.sourcePath;
+  const datasetName = payload.datasetName || 'device_export_ingest';
+  if (!exportPath || !fs.existsSync(exportPath)) {
+    throw new Error('Device export source not found');
+  }
+
+  const content = fs.readFileSync(path.resolve(exportPath), 'utf8');
+  const ext = path.extname(exportPath).toLowerCase();
+  const parsed = ext === '.json' ? parseJsonRows(content) : parseCsv(content);
+  const resumeFromRaw = await loadCheckpoint(jobId, 'last_processed_row');
+  const resumeFrom = Math.max(0, Number(resumeFromRaw || 0));
+  const resumeSlice = parsed.slice(resumeFrom);
+  const normalized = resumeSlice.map((row) => normalizedRow(normalizeDeviceExportRow(row)));
+  const { rows, duplicateCount } = dedupeRows(normalized);
+
+  await saveCheckpoint(jobId, 'connector', CONNECTOR_DEVICE_EXPORT);
+  await saveCheckpoint(jobId, 'source_path', exportPath);
+  await persistDatasetVersion({
+    jobId,
+    datasetName,
+    parsedRows: resumeSlice,
+    rows,
+    duplicateCount,
+    sourceSystem: payload.sourceSystem || 'device_export',
+    sourcePath: exportPath,
+    transformations: ['device_export_mapping', 'miles_to_km', 'currency_to_usd', 'deterministic_dedupe']
+  });
+}
+
 async function processNetworkShareStub(jobId, payload) {
-  const sourcePath = payload?.sourcePath || 'local_network_share://stub';
+  const sourcePath = payload?.sourcePath || payload?.networkSharePath;
   const datasetName = payload?.datasetName || 'network_share_ingest';
+  
+  if (!sourcePath) {
+    throw new Error('Network share path is required');
+  }
+
+  // Resolve the network share path
+  const resolvedPath = path.resolve(sourcePath);
+  
+  if (!fs.existsSync(resolvedPath)) {
+    throw new Error(`Network share path not found: ${sourcePath}`);
+  }
+
   await saveCheckpoint(jobId, 'connector', CONNECTOR_NETWORK_SHARE_STUB);
   await saveCheckpoint(jobId, 'source_path', sourcePath);
   await saveCheckpoint(jobId, 'dataset_name', datasetName);
-  await saveCheckpoint(jobId, 'records_scanned', 0);
+
+  // Get checkpoint for resumption
+  const lastProcessedFile = await loadCheckpoint(jobId, 'last_processed_file');
+  const processedFiles = new Set(lastProcessedFile ? lastProcessedFile.split(',') : []);
+
+  // Enumerate files in the network share
+  const files = fs.readdirSync(resolvedPath)
+    .filter(f => {
+      const ext = path.extname(f).toLowerCase();
+      return (ext === '.csv' || ext === '.json') && !processedFiles.has(f);
+    })
+    .map(f => path.join(resolvedPath, f));
+
+  if (files.length === 0) {
+    await saveCheckpoint(jobId, 'records_scanned', 0);
+    return;
+  }
+
+  let allParsedRows = [];
+  const newlyProcessed = [];
+
+  // Process each file
+  for (const filePath of files) {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const ext = path.extname(filePath).toLowerCase();
+    const parsed = ext === '.json' ? parseJsonRows(content) : parseCsv(content);
+    allParsedRows = allParsedRows.concat(parsed);
+    newlyProcessed.push(path.basename(filePath));
+  }
+
+  // Apply transformations
+  const normalized = allParsedRows.map(normalizedRow);
+  const { rows, duplicateCount } = dedupeRows(normalized);
+
+  // Persist dataset version with lineage
+  await persistDatasetVersion({
+    jobId,
+    datasetName,
+    parsedRows: allParsedRows,
+    rows,
+    duplicateCount,
+    sourceSystem: payload.sourceSystem || 'network_share',
+    sourcePath,
+    transformations: ['network_share_enumeration', 'miles_to_km', 'currency_to_usd', 'deterministic_dedupe']
+  });
+
+  // Update checkpoint with processed files
+  processedFiles.add(...newlyProcessed);
+  await saveCheckpoint(jobId, 'last_processed_file', Array.from(processedFiles).join(','));
+  await saveCheckpoint(jobId, 'records_scanned', allParsedRows.length);
 }
 
 const connectorRegistry = new Map([
   [CONNECTOR_CSV, processCsvJob],
+  [CONNECTOR_DEVICE_EXPORT, processDeviceExportJob],
   [CONNECTOR_NETWORK_SHARE_STUB, processNetworkShareStub]
 ]);
 
@@ -366,6 +504,7 @@ export function registerIngestionConnector(connectorName, runner) {
 function resolveConnector(jobType, payload) {
   const explicit = String(payload?.connector || '').trim();
   if (explicit && connectorRegistry.has(explicit)) return explicit;
+  if (jobType === 'device_export_import') return CONNECTOR_DEVICE_EXPORT;
   if (jobType === 'network_share_import') return CONNECTOR_NETWORK_SHARE_STUB;
   return CONNECTOR_CSV;
 }
