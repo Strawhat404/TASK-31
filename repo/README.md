@@ -16,8 +16,8 @@ docker compose up
 ```
 
 **Services:**
-- Backend API: https://localhost:4000
-- Frontend UI: http://localhost:5173
+- Frontend + API (via Caddy TLS proxy): https://localhost
+- Backend API direct: http://localhost:4000 (internal only)
 
 **Default Admin Credentials:**
 - Username: `admin`
