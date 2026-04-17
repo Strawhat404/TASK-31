@@ -29,7 +29,7 @@ services:
         condition: service_healthy
     environment:
       PORT: 4000
-      NODE_ENV: production
+      NODE_ENV: development
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: roadsafe
