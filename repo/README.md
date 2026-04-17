@@ -1,6 +1,6 @@
 # RoadSafe Inspection Operations Platform
 
-fullstack
+**Project type:** fullstack
 
 Vehicle inspection platform built with Vue 3, Koa.js, and MySQL. Supports multi-role workflows across administrators, coordinators, inspectors, customers, and data engineers, with scope-restricted access enforced at the API level.
 
@@ -132,6 +132,71 @@ curl -k -X POST https://localhost/api/auth/login \
 
 ---
 
+## Architecture
+
+### Request Flow
+
+```
+Browser (HTTPS)
+    │
+    ▼
+┌─────────────────────┐
+│  Caddy TLS Proxy    │  ← Trust boundary: TLS termination
+│  (port 443/80)      │     Self-signed cert for local dev
+└─────────┬───────────┘
+          │ HTTP (internal Docker network)
+          ├──── /api/*  ──────────────┐
+          │                           ▼
+          │                  ┌─────────────────────┐
+          │                  │  Koa.js Backend      │
+          │                  │  (port 4000)         │
+          │                  │                      │
+          │                  │  Middleware chain:    │
+          │                  │  CORS → Error handler │
+          │                  │  → Body parser        │
+          │                  │  → Auth (optional)    │
+          │                  │  → CSRF validation    │
+          │                  │  → Rate limiter       │
+          │                  │  → Route handlers     │
+          │                  └─────────┬────────────┘
+          │                            │ mysql2
+          │                            ▼
+          │                  ┌─────────────────────┐
+          │                  │  MySQL 8.4           │
+          │                  │  (port 3306)         │
+          │                  │  Schema: roadsafe    │
+          │                  └─────────────────────┘
+          │
+          └──── /*  ─────────────────┐
+                                     ▼
+                            ┌─────────────────────┐
+                            │  Nginx (Frontend)    │
+                            │  Vue 3 SPA           │
+                            │  (port 80)           │
+                            └─────────────────────┘
+```
+
+### Trust Boundaries
+
+1. **Caddy → Backend**: Internal Docker network. TLS is terminated at Caddy; backend runs plain HTTP. The backend enforces `TLS_ENABLED=true` in production when Caddy is not present.
+2. **Backend → MySQL**: Connection pool with credentials from environment variables. Parameterized queries prevent SQL injection.
+3. **Browser → Caddy**: Self-signed TLS certificate for local development. Browser must accept the certificate on first visit.
+4. **CSRF**: Mutations (POST/PUT/PATCH/DELETE) require the Bearer token echoed in the `X-CSRF-Token` header.
+5. **Scope enforcement**: All non-admin API requests are filtered by `location_code` and `department_code` at the middleware layer.
+
+---
+
+## Known Limitations
+
+- **Self-signed TLS**: The Caddy proxy generates a self-signed certificate for `localhost`. Browsers will show a security warning on first visit. Accept the certificate to proceed. Automated tools (curl, fetch) require `--insecure` / `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- **Single-node deployment**: The architecture is designed for single-host Docker Compose. Rate limiting uses in-memory counters that are not shared across instances.
+- **Session storage**: Sessions are stored in MySQL. There is no Redis or distributed cache layer.
+- **Ingestion scheduler**: The hourly ingestion job uses `node-cron` with a `setInterval` fallback. Job state is stored in MySQL — if the backend restarts, in-flight jobs may need manual recovery.
+- **File storage**: File ingest operations validate against a configurable drop zone path (`/var/roadsafe/dropzone`). Files are not stored in object storage.
+- **Encryption key**: The `DATA_ENCRYPTION_KEY` environment variable in `docker-compose.yml` is a placeholder. Replace it with a real 64-character hex key before any production use.
+
+---
+
 ## Project Structure
 
 ```
@@ -166,14 +231,14 @@ repo/
 
 ## Testing
 
-### Running tests in Docker (recommended)
+### Running tests (Docker required)
 
 ```bash
 docker-compose up -d
 ./run_tests.sh
 ```
 
-The documented test workflow is Docker-based. Do not use local package installation or local dependency setup for verification.
+The test suite requires a running Docker Compose stack. The `run_tests.sh` script will exit with an error if the backend container is not running. Do not use local package installation (`npm install`) for test execution — all backend and API tests run inside Docker containers against the real MySQL instance.
 
 ### Test suites
 

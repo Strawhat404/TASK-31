@@ -13,8 +13,10 @@ test('unauthenticated requests to protected routes return 401', async () => {
   ];
 
   for (const route of routes) {
-    const { status } = await request(route);
+    const { status, data } = await request(route);
     assert.equal(status, 401, `expected 401 for ${route}, got ${status}`);
+    assert.ok(data.error, `unauthenticated response for ${route} must include an error field`);
+    assert.equal(typeof data.error, 'string', `error field for ${route} must be a string`);
   }
 });
 

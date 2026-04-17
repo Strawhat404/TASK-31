@@ -2,9 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request, loginAdmin, createUserAndLogin } from './helpers/setup.js';
 
-test('auth: unauthenticated request to protected route returns 401', async () => {
-  const { status } = await request('/api/users?page=1&pageSize=5');
+test('auth: unauthenticated request to protected route returns 401 with error field', async () => {
+  const { status, data } = await request('/api/users?page=1&pageSize=5');
   assert.equal(status, 401);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('auth: successful admin login returns token and user fields', async () => {
@@ -62,4 +64,6 @@ test('auth: coordinator token is rejected when scheduling outside own scope (403
     }
   });
   assert.equal(status, 403, `expected 403 for cross-scope scheduling, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'cross-scope response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });

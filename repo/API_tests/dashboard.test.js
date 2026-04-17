@@ -88,9 +88,11 @@ test('dashboard summary: coordinator cross-scope with ?location=BRANCH returns 4
   assert.equal(status, 403, `expected 403 for cross-scope summary, got ${status}: ${JSON.stringify(data)}`);
 });
 
-test('dashboard summary: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/dashboard/summary');
+test('dashboard summary: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/dashboard/summary');
   assert.equal(status, 401, `expected 401 for unauthenticated summary, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -110,9 +112,11 @@ test('dashboard coordinator-view: admin receives 200 with seats array and bayUti
   assert.ok(Array.isArray(data.bayUtilization), 'bayUtilization must be an array');
 });
 
-test('dashboard coordinator-view: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/dashboard/coordinator-view');
+test('dashboard coordinator-view: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/dashboard/coordinator-view');
   assert.equal(status, 401, `expected 401 for unauthenticated coordinator-view, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -134,7 +138,9 @@ test('dashboard ingestion-health: admin receives 200 with statuses array where e
   }
 });
 
-test('dashboard ingestion-health: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/dashboard/ingestion-health');
+test('dashboard ingestion-health: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/dashboard/ingestion-health');
   assert.equal(status, 401, `expected 401 for unauthenticated ingestion-health, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });

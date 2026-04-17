@@ -26,6 +26,7 @@ test('e2e flow 1: admin creates coordinator user who can log in and see their ow
     body: newUser
   });
   assert.equal(registerRes.status, 201, `register must return 201, got ${registerRes.status}: ${JSON.stringify(registerRes.data)}`);
+  assert.ok(registerRes.data, 'register response must have a body');
 
   // Verify user appears in GET /api/users list
   const listRes = await request(
@@ -33,6 +34,7 @@ test('e2e flow 1: admin creates coordinator user who can log in and see their ow
     { token: adminToken }
   );
   assert.equal(listRes.status, 200, `user list must return 200, got ${listRes.status}: ${JSON.stringify(listRes.data)}`);
+  assert.ok(Array.isArray(listRes.data.rows), 'user list response must have a rows array');
   const found = (listRes.data.rows || []).find((u) => u.username === newUser.username);
   assert.ok(found, `newly created user must appear in /api/users list`);
 

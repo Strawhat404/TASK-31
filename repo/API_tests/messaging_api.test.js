@@ -33,6 +33,11 @@ test('messaging send: Coordinator can POST /api/messages/send - returns 200 or 2
     [200, 201].includes(status),
     `expected 200 or 201 for POST messages/send, got ${status}: ${JSON.stringify(data)}`
   );
+
+  if (status === 201) {
+    assert.ok('messageId' in data, `201 response must include messageId: ${JSON.stringify(data)}`);
+    assert.ok(Number.isInteger(data.messageId) && data.messageId > 0, `messageId must be a positive integer, got: ${data.messageId}`);
+  }
 });
 
 test('messaging inbox: sent message appears in recipient inbox with matching subject', async () => {
@@ -89,13 +94,17 @@ test('messaging outbox: Admin can GET /api/messages/outbox - has entries or rows
   );
 });
 
-test('messaging outbox export: Admin can POST /api/messages/outbox/export - returns 200', async () => {
+test('messaging outbox export: Admin can POST /api/messages/outbox/export - returns 200 with exported count', async () => {
   const adminToken = await loginAdmin();
   const { status, data } = await request('/api/messages/outbox/export', {
     method: 'POST',
     token: adminToken
   });
   assert.equal(status, 200, `expected 200 for POST outbox/export, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok('exported' in data, `response must have 'exported' field, got: ${JSON.stringify(data)}`);
+  assert.equal(typeof data.exported, 'number', `'exported' must be a number, got: ${typeof data.exported}`);
+  assert.ok(data.exported >= 0, `'exported' must be non-negative, got: ${data.exported}`);
+  assert.ok(Array.isArray(data.rows), `response must have 'rows' array, got: ${JSON.stringify(data)}`);
 });
 
 test('messaging send: Customer gets 403 on POST /api/messages/send', async () => {
@@ -118,6 +127,8 @@ test('messaging send: Customer gets 403 on POST /api/messages/send', async () =>
     }
   });
   assert.equal(status, 403, `expected 403 for Customer on POST messages/send, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'forbidden response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('messaging outbox export: Customer gets 403 on POST /api/messages/outbox/export', async () => {
@@ -133,10 +144,12 @@ test('messaging outbox export: Customer gets 403 on POST /api/messages/outbox/ex
     token: customerToken
   });
   assert.equal(status, 403, `expected 403 for Customer on POST outbox/export, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'forbidden response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('messaging send: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/messages/send', {
+  const { status, data } = await request('/api/messages/send', {
     method: 'POST',
     body: {
       recipient_user_id: 1,
@@ -147,16 +160,22 @@ test('messaging send: unauthenticated returns 401', async () => {
     }
   });
   assert.equal(status, 401, `expected 401 for unauthenticated POST messages/send, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('messaging outbox: unauthenticated returns 401 on GET /api/messages/outbox', async () => {
-  const { status } = await request('/api/messages/outbox');
+  const { status, data } = await request('/api/messages/outbox');
   assert.equal(status, 401, `expected 401 for unauthenticated GET outbox, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('messaging outbox export: unauthenticated returns 401 on POST /api/messages/outbox/export', async () => {
-  const { status } = await request('/api/messages/outbox/export', { method: 'POST' });
+  const { status, data } = await request('/api/messages/outbox/export', { method: 'POST' });
   assert.equal(status, 401, `expected 401 for unauthenticated POST outbox/export, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('messaging inbox: unauthenticated GET /api/messages/inbox returns 401', async () => {

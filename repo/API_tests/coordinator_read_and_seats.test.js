@@ -32,9 +32,11 @@ test('bay-utilization: admin success 200 with explicit location/department param
   assert.ok(Array.isArray(data.rows), 'rows must be an array');
 });
 
-test('bay-utilization: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/coordinator/bay-utilization');
+test('bay-utilization: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/coordinator/bay-utilization');
   assert.equal(status, 401, `expected 401 for unauthenticated, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('bay-utilization: cross-scope coordinator with location=BRANCH returns 403', async () => {
@@ -50,6 +52,8 @@ test('bay-utilization: cross-scope coordinator with location=BRANCH returns 403'
     { token: coordToken }
   );
   assert.equal(status, 403, `expected 403 for cross-scope, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'cross-scope response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -79,9 +83,11 @@ test('waiting-room/seats GET: admin success 200 with { seats } array', async () 
   assert.ok(Array.isArray(data.seats), 'seats must be an array');
 });
 
-test('waiting-room/seats GET: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/coordinator/waiting-room/seats');
+test('waiting-room/seats GET: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/coordinator/waiting-room/seats');
   assert.equal(status, 401, `expected 401 for unauthenticated, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('waiting-room/seats GET: cross-scope coordinator with location=BRANCH returns 403', async () => {
@@ -97,6 +103,8 @@ test('waiting-room/seats GET: cross-scope coordinator with location=BRANCH retur
     { token: coordToken }
   );
   assert.equal(status, 403, `expected 403 for cross-scope, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'cross-scope response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -169,6 +177,8 @@ test('waiting-room/seats PUT: Customer gets 403', async () => {
     body: payload
   });
   assert.equal(status, 403, `expected 403 for Customer, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'forbidden response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('waiting-room/seats PUT: cross-scope coordinator (location_code BRANCH) returns 403', async () => {
@@ -191,6 +201,8 @@ test('waiting-room/seats PUT: cross-scope coordinator (location_code BRANCH) ret
     body: payload
   });
   assert.equal(status, 403, `expected 403 for cross-scope, got ${status}: ${JSON.stringify(data)}`);
+  assert.ok(data.error, 'cross-scope response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 test('waiting-room/seats PUT: unauthenticated returns 401', async () => {
@@ -199,11 +211,13 @@ test('waiting-room/seats PUT: unauthenticated returns 401', async () => {
     department_code: 'OPS',
     seats: [{ seat_label: 'T1', x_pos: 0, y_pos: 0 }]
   };
-  const { status } = await request('/api/coordinator/waiting-room/seats', {
+  const { status, data } = await request('/api/coordinator/waiting-room/seats', {
     method: 'PUT',
     body: payload
   });
   assert.equal(status, 401, `expected 401 for unauthenticated, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -224,9 +238,11 @@ test('open-appointments: coordinator 200 with { appointments } array', async () 
   assert.ok(Array.isArray(data.appointments), 'appointments must be an array');
 });
 
-test('open-appointments: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/coordinator/open-appointments');
+test('open-appointments: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/coordinator/open-appointments');
   assert.equal(status, 401, `expected 401 for unauthenticated, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
 
 // ---------------------------------------------------------------------------
@@ -247,7 +263,9 @@ test('maintenance-windows: coordinator 200 with { windows } array', async () => 
   assert.ok(Array.isArray(data.windows), 'windows must be an array');
 });
 
-test('maintenance-windows: unauthenticated returns 401', async () => {
-  const { status } = await request('/api/coordinator/maintenance-windows');
+test('maintenance-windows: unauthenticated returns 401 with error field', async () => {
+  const { status, data } = await request('/api/coordinator/maintenance-windows');
   assert.equal(status, 401, `expected 401 for unauthenticated, got ${status}`);
+  assert.ok(data.error, 'unauthenticated response must include an error field');
+  assert.equal(typeof data.error, 'string', 'error field must be a string');
 });
