@@ -27,6 +27,9 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+    volumes:
+      - ./unit_tests:/unit_tests:ro
+      - ./API_tests:/API_tests:ro
     environment:
       PORT: 4000
       NODE_ENV: development
