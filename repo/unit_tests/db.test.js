@@ -35,51 +35,27 @@ test('db: pingDb is exported as an async function', () => {
 
 // ─── query() parameter handling ──────────────────────────────────────────────
 
-test('db: query() with no params rejects with connection error (not crash)', async () => {
-  // Without a DB, the pool.query call rejects. Verify it rejects cleanly.
-  await assert.rejects(
-    () => query('SELECT 1'),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'query without params must reject with Error when DB unavailable'
-  );
+test('db: query() with no params resolves with an array', async () => {
+  const rows = await query('SELECT 1 AS n');
+  assert.ok(Array.isArray(rows), 'query must resolve with an array');
 });
 
-test('db: query() with empty params array rejects with connection error (not crash)', async () => {
-  await assert.rejects(
-    () => query('SELECT 1', []),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'query with empty params must reject with Error when DB unavailable'
-  );
+test('db: query() with empty params array resolves with an array', async () => {
+  const rows = await query('SELECT 1 AS n', []);
+  assert.ok(Array.isArray(rows), 'query with empty params must resolve with an array');
 });
 
-test('db: query() with populated params rejects with connection error (not crash)', async () => {
-  await assert.rejects(
-    () => query('SELECT * FROM users WHERE id = ?', [1]),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'query with params must reject with Error when DB unavailable'
-  );
+test('db: query() with populated params resolves with an array', async () => {
+  const rows = await query('SELECT ? AS n', [42]);
+  assert.ok(Array.isArray(rows), 'query with params must resolve with an array');
+  assert.equal(rows[0].n, 42, 'query must return the bound parameter value');
 });
 
 // ─── execute() parameter handling ────────────────────────────────────────────
 
-test('db: execute() with no params rejects with connection error (not crash)', async () => {
-  await assert.rejects(
-    () => execute('SELECT 1'),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'execute without params must reject with Error when DB unavailable'
-  );
+test('db: execute() with no params resolves', async () => {
+  const result = await execute('SELECT 1');
+  assert.ok(result !== undefined, 'execute must resolve');
 });
 
 test('db: execute() with populated params rejects with connection error (not crash)', async () => {
@@ -95,27 +71,18 @@ test('db: execute() with populated params rejects with connection error (not cra
 
 // ─── getConnection() ─────────────────────────────────────────────────────────
 
-test('db: getConnection() rejects with connection error when DB unavailable', async () => {
-  await assert.rejects(
-    () => getConnection(),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'getConnection must reject with Error when DB unavailable'
-  );
+test('db: getConnection() resolves with a connection object', async () => {
+  const conn = await getConnection();
+  assert.ok(conn !== null && typeof conn === 'object', 'getConnection must resolve with a connection');
+  conn.release();
 });
 
 // ─── pingDb() ────────────────────────────────────────────────────────────────
 
-test('db: pingDb() rejects with connection error when DB unavailable', async () => {
-  await assert.rejects(
+test('db: pingDb() resolves without error when DB is available', async () => {
+  await assert.doesNotReject(
     () => pingDb(),
-    (err) => {
-      assert.ok(err instanceof Error, 'rejection must be an Error');
-      return true;
-    },
-    'pingDb must reject with Error when DB unavailable'
+    'pingDb must resolve when DB is available'
   );
 });
 

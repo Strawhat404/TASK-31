@@ -5,6 +5,13 @@ import { request, loginAdmin, createUser, createUserAndLogin, futureSlot } from 
 test('operations: duplicate appointment conflict and 5-minute submission lock', async () => {
   const adminToken = await loginAdmin();
 
+  // Ensure at least one Inspector exists in HQ/OPS so scheduleAppointment can find one
+  await createUser(adminToken, {
+    role_name: 'Inspector',
+    location_code: 'HQ',
+    department_code: 'OPS'
+  });
+
   const { id: coordinatorId } = await createUser(adminToken, {
     role_name: 'Coordinator',
     location_code: 'HQ',
@@ -36,7 +43,7 @@ test('operations: duplicate appointment conflict and 5-minute submission lock', 
   };
 
   // --- Duplicate appointment conflict ---
-  const duplicateSlot = futureSlot(2, 10, 0);
+  const duplicateSlot = futureSlot(15, 10, 0);
 
   const firstAttempt = await request('/api/coordinator/appointments/schedule', {
     method: 'POST',
@@ -67,13 +74,27 @@ test('operations: duplicate appointment conflict and 5-minute submission lock', 
   }
 
   // --- 5-minute submission lock ---
-  const lockSlot1 = futureSlot(3, 11, 0);
-  const lockSlot2 = futureSlot(3, 11, 30);
+  // Use a fresh customer so the submission lock from the duplicate test doesn't interfere
+  const { id: lockCustomerId } = await createUser(adminToken, {
+    role_name: 'Customer',
+    location_code: 'HQ',
+    department_code: 'OPS'
+  });
+  const lockPayload = {
+    customer_id: lockCustomerId,
+    location_code: 'HQ',
+    department_code: 'OPS',
+    vehicle_type: 'light',
+    notes: 'lock test'
+  };
+
+  const lockSlot1 = futureSlot(16, 11, 0);
+  const lockSlot2 = futureSlot(16, 11, 30);
 
   const first = await request('/api/coordinator/appointments/schedule', {
     method: 'POST',
     token: coordinatorToken,
-    body: { ...basePayload, scheduled_at: lockSlot1 }
+    body: { ...lockPayload, scheduled_at: lockSlot1 }
   });
 
   assert.equal(first.status, 201,
@@ -87,7 +108,7 @@ test('operations: duplicate appointment conflict and 5-minute submission lock', 
   const second = await request('/api/coordinator/appointments/schedule', {
     method: 'POST',
     token: coordinatorToken,
-    body: { ...basePayload, scheduled_at: lockSlot2 }
+    body: { ...lockPayload, scheduled_at: lockSlot2 }
   });
 
   assert.equal(second.status, 409,

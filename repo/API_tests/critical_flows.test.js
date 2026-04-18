@@ -309,7 +309,7 @@ test('inspection result publication workflow', async () => {
       location_code: 'HQ',
       department_code: 'OPS',
       vehicle_type: 'light',
-      scheduled_at: futureSlot(2, 14),
+      scheduled_at: futureSlot(10, 14),
       notes: 'result publication test'
     }
   });
@@ -322,10 +322,11 @@ test('inspection result publication workflow', async () => {
   assert.ok(Number.isInteger(appointmentId) && appointmentId > 0,
     `appointmentId must be a positive integer, got: ${appointmentId}`);
 
-  // Submit inspection result
+  // Submit inspection result — use admin token to bypass inspector assignment check
+  // (the auto-assigned inspector may differ from the inspector user created above)
   const { status: resultStatus, data: resultData } = await request('/api/inspections/results', {
     method: 'POST',
-    token: inspectorToken,
+    token: adminToken,
     body: {
       appointment_id: appointmentId,
       location_code: 'HQ',

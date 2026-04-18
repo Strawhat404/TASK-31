@@ -269,7 +269,11 @@ export async function upsertSeats({ locationCode, departmentCode, seats }) {
       await query(
         `INSERT INTO waiting_room_seats
           (location_code, department_code, seat_label, x_pos, y_pos, is_active)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           x_pos = VALUES(x_pos),
+           y_pos = VALUES(y_pos),
+           is_active = VALUES(is_active)`,
         [locationCode, departmentCode, seat.seat_label, seat.x_pos || 0, seat.y_pos || 0, seat.is_active ? 1 : 0]
       );
     }

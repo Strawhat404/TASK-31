@@ -78,7 +78,7 @@ test('e2e flow 2: coordinator schedules an appointment that appears in coordinat
   });
 
   // Schedule an appointment via coordinator
-  const scheduledAt = futureSlot(5, 9);
+  const scheduledAt = futureSlot(20, 9);
   const scheduleRes = await request('/api/coordinator/appointments/schedule', {
     method: 'POST',
     token: coordToken,
@@ -140,7 +140,7 @@ test('e2e flow 3: inspector publishes inspection result that appears in results/
   });
 
   // Schedule appointment - system auto-assigns an available inspector
-  const scheduledAt = futureSlot(6, 14);
+  const scheduledAt = futureSlot(21, 14);
   const scheduleRes = await request('/api/coordinator/appointments/schedule', {
     method: 'POST',
     token: coordToken,
