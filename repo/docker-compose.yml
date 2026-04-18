@@ -44,7 +44,7 @@ services:
       USER_RATE_LIMIT_PER_MIN: 60
       TLS_ENABLED: 'false'
       FRONTEND_ORIGIN: https://localhost
-      SENSITIVE_REGEX_RULES: ssn::\\b\\d{3}-\\d{2}-\\d{4}\\b,ssn_compact::\\b\\d{9}\\b
+      SENSITIVE_REGEX_RULES: 'ssn::\b\d{3}-\d{2}-\d{4}\b,ssn_compact::\b\d{9}\b'
       SENSITIVE_DICTIONARY_TERMS: social security number,ssn
       DATA_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
       AES_256_KEY_HEX: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
